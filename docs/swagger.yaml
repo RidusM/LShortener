@@ -1,0 +1,205 @@
+basePath: /
+definitions:
+  handler.AnalyticsResponse:
+    properties:
+      clicks_by_day:
+        additionalProperties:
+          type: integer
+        example:
+          "2024-01-01": 12
+          "2024-01-02": 45
+        type: object
+      clicks_by_user_agent:
+        additionalProperties:
+          type: integer
+        example:
+          Mozilla/5.0: 89
+          curl/7.68.0: 12
+        type: object
+      created_at:
+        example: "2023-10-27T10:00:00Z"
+        type: string
+      original_url:
+        example: https://example.com/very/long/url
+        type: string
+      recent_clicks:
+        items:
+          $ref: '#/definitions/handler.ClickDetail'
+        type: array
+      short_code:
+        example: abc123
+        type: string
+      total_clicks:
+        example: 1234
+        type: integer
+    type: object
+  handler.ClickDetail:
+    properties:
+      clicked_at:
+        example: "2023-10-27T10:00:00Z"
+        type: string
+      ip_address:
+        example: 192.168.1.100
+        type: string
+      referer:
+        example: https://google.com
+        type: string
+      user_agent:
+        example: Mozilla/5.0 (Windows NT 10.0; Win64; x64)
+        type: string
+    type: object
+  handler.CreateShortURLRequest:
+    properties:
+      custom_alias:
+        example: my-link
+        type: string
+      expires_at:
+        example: "2023-10-27T10:00:00Z"
+        type: string
+      original_url:
+        example: https://example.com/very/long/url
+        type: string
+    required:
+    - original_url
+    type: object
+  handler.CreateShortURLResponse:
+    properties:
+      created_at:
+        example: "2023-10-27T10:00:00Z"
+        type: string
+      custom_alias:
+        example: my-link
+        type: string
+      expires_at:
+        example: "2023-10-27T10:00:00Z"
+        type: string
+      id:
+        example: 550e8400-e29b-41d4-a716-446655440001
+        type: string
+      original_url:
+        example: https://example.com/very/long/url
+        type: string
+      short_code:
+        example: abc123
+        type: string
+      short_url:
+        example: https://short.link/abc123
+        type: string
+    type: object
+  handler.ErrorResponse:
+    properties:
+      code:
+        example: not_found
+        type: string
+      details:
+        example: link with short_code does not exist
+        type: string
+      error:
+        example: link not found
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: API для сокращения ссылок
+  license:
+    name: MIT-0
+    url: https://github.com/aws/mit-0
+  title: Link Shortener API
+  version: "1.0"
+paths:
+  /{short_code}:
+    get:
+      description: Перенаправляет на оригинальную ссылку по короткому коду
+      parameters:
+      - description: Короткий код ссылки
+        in: path
+        minLength: 1
+        name: short_code
+        required: true
+        type: string
+      responses:
+        "301":
+          description: Redirect to original URL
+          schema:
+            type: string
+        "400":
+          description: Отсутствует short_code
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "404":
+          description: Ссылка не найдена
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "500":
+          description: Внутренняя ошибка
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Переход по короткой ссылке
+      tags:
+      - ShortURL
+  /{short_code}/analytics:
+    get:
+      consumes:
+      - application/json
+      description: Возвращает статистику переходов по короткому коду
+      parameters:
+      - description: Короткий код ссылки
+        in: path
+        minLength: 1
+        name: short_code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Аналитика получена
+          schema:
+            $ref: '#/definitions/handler.AnalyticsResponse'
+        "400":
+          description: Отсутствует short_code
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "404":
+          description: Ссылка не найдена
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "500":
+          description: Внутренняя ошибка
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Получить аналитику по короткой ссылке
+      tags:
+      - ShortURL
+  /shorten:
+    post:
+      consumes:
+      - application/json
+      description: Создает сокращенную ссылку из оригинальной
+      parameters:
+      - description: Данные для создания короткой ссылки
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.CreateShortURLRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Короткая ссылка создана
+          schema:
+            $ref: '#/definitions/handler.CreateShortURLResponse'
+        "400":
+          description: Ошибка валидации
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "500":
+          description: Внутренняя ошибка сервера
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Создать сокращенную ссылку
+      tags:
+      - ShortURL
+swagger: "2.0"

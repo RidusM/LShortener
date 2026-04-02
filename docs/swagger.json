@@ -1,0 +1,299 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "API для сокращения ссылок",
+        "title": "Link Shortener API",
+        "contact": {},
+        "license": {
+            "name": "MIT-0",
+            "url": "https://github.com/aws/mit-0"
+        },
+        "version": "1.0"
+    },
+    "host": "localhost:8080",
+    "basePath": "/",
+    "paths": {
+        "/shorten": {
+            "post": {
+                "description": "Создает сокращенную ссылку из оригинальной",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ShortURL"
+                ],
+                "summary": "Создать сокращенную ссылку",
+                "parameters": [
+                    {
+                        "description": "Данные для создания короткой ссылки",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.CreateShortURLRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Короткая ссылка создана",
+                        "schema": {
+                            "$ref": "#/definitions/handler.CreateShortURLResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Ошибка валидации",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Внутренняя ошибка сервера",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/{short_code}": {
+            "get": {
+                "description": "Перенаправляет на оригинальную ссылку по короткому коду",
+                "tags": [
+                    "ShortURL"
+                ],
+                "summary": "Переход по короткой ссылке",
+                "parameters": [
+                    {
+                        "minLength": 1,
+                        "type": "string",
+                        "description": "Короткий код ссылки",
+                        "name": "short_code",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "301": {
+                        "description": "Redirect to original URL",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Отсутствует short_code",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Ссылка не найдена",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Внутренняя ошибка",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/{short_code}/analytics": {
+            "get": {
+                "description": "Возвращает статистику переходов по короткому коду",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ShortURL"
+                ],
+                "summary": "Получить аналитику по короткой ссылке",
+                "parameters": [
+                    {
+                        "minLength": 1,
+                        "type": "string",
+                        "description": "Короткий код ссылки",
+                        "name": "short_code",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Аналитика получена",
+                        "schema": {
+                            "$ref": "#/definitions/handler.AnalyticsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Отсутствует short_code",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Ссылка не найдена",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Внутренняя ошибка",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "handler.AnalyticsResponse": {
+            "type": "object",
+            "properties": {
+                "clicks_by_day": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    },
+                    "example": {
+                        "2024-01-01": 12,
+                        "2024-01-02": 45
+                    }
+                },
+                "clicks_by_user_agent": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    },
+                    "example": {
+                        "Mozilla/5.0": 89,
+                        "curl/7.68.0": 12
+                    }
+                },
+                "created_at": {
+                    "type": "string",
+                    "example": "2023-10-27T10:00:00Z"
+                },
+                "original_url": {
+                    "type": "string",
+                    "example": "https://example.com/very/long/url"
+                },
+                "recent_clicks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handler.ClickDetail"
+                    }
+                },
+                "short_code": {
+                    "type": "string",
+                    "example": "abc123"
+                },
+                "total_clicks": {
+                    "type": "integer",
+                    "example": 1234
+                }
+            }
+        },
+        "handler.ClickDetail": {
+            "type": "object",
+            "properties": {
+                "clicked_at": {
+                    "type": "string",
+                    "example": "2023-10-27T10:00:00Z"
+                },
+                "ip_address": {
+                    "type": "string",
+                    "example": "192.168.1.100"
+                },
+                "referer": {
+                    "type": "string",
+                    "example": "https://google.com"
+                },
+                "user_agent": {
+                    "type": "string",
+                    "example": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+                }
+            }
+        },
+        "handler.CreateShortURLRequest": {
+            "type": "object",
+            "required": [
+                "original_url"
+            ],
+            "properties": {
+                "custom_alias": {
+                    "type": "string",
+                    "example": "my-link"
+                },
+                "expires_at": {
+                    "type": "string",
+                    "example": "2023-10-27T10:00:00Z"
+                },
+                "original_url": {
+                    "type": "string",
+                    "example": "https://example.com/very/long/url"
+                }
+            }
+        },
+        "handler.CreateShortURLResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string",
+                    "example": "2023-10-27T10:00:00Z"
+                },
+                "custom_alias": {
+                    "type": "string",
+                    "example": "my-link"
+                },
+                "expires_at": {
+                    "type": "string",
+                    "example": "2023-10-27T10:00:00Z"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440001"
+                },
+                "original_url": {
+                    "type": "string",
+                    "example": "https://example.com/very/long/url"
+                },
+                "short_code": {
+                    "type": "string",
+                    "example": "abc123"
+                },
+                "short_url": {
+                    "type": "string",
+                    "example": "https://short.link/abc123"
+                }
+            }
+        },
+        "handler.ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "example": "not_found"
+                },
+                "details": {
+                    "type": "string",
+                    "example": "link with short_code does not exist"
+                },
+                "error": {
+                    "type": "string",
+                    "example": "link not found"
+                }
+            }
+        }
+    }
+}
