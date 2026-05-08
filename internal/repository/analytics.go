@@ -2,30 +2,27 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"time"
 
 	"lshortener/internal/entity"
 
 	"github.com/Masterminds/squirrel"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	pgxdriver "github.com/wb-go/wbf/dbpg/pgx-driver"
 )
 
 const (
-	_recentClicksLimit = 30
-	_analyticsLimit    = 10
+	_analyticsColumns = "id, url_id, user_agent, ip_address, referer, clicked_at"
+	columnURLID       = "url_id"
 )
 
 type AnalyticsRepository struct {
 	db *pgxdriver.Postgres
-}
-
-type urlShortInfo struct {
-	ShortCode   string
-	OriginalURL string
-	TotalClicks int64
-	CreatedAt   time.Time
 }
 
 func NewAnalyticsRepository(db *pgxdriver.Postgres) *AnalyticsRepository {
@@ -35,211 +32,195 @@ func NewAnalyticsRepository(db *pgxdriver.Postgres) *AnalyticsRepository {
 func (r *AnalyticsRepository) RecordClick(
 	ctx context.Context,
 	qe pgxdriver.QueryExecuter,
-	analytics entity.Analytics,
+	a entity.Analytics,
 ) error {
 	const op = "repository.analytics.RecordClick"
 
-	executor := execOrDB(qe, r.db)
+	sql, args, err := r.db.Insert("analytics").
+		Columns(_analyticsColumns).
+		Values(a.ID, a.URLID, a.UserAgent, a.IPAddress, a.Referer, a.ClickedAt).
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
 
-	if analytics.ID == uuid.Nil {
-		var err error
-		analytics.ID, err = uuid.NewV7()
-		if err != nil {
-			return fmt.Errorf("%s: v7 uuid: %w", op, err)
+	_, err = execOrDB(qe, r.db).Exec(ctx, sql, args...)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return fmt.Errorf("%s: %w", op, entity.ErrConflictingData)
 		}
-	}
-
-	insert := r.db.Insert("analytics").
-		Columns("id", "url_id", "user_agent", "ip_address", "referer").
-		Values(analytics.ID, analytics.URLId, analytics.UserAgent, analytics.IPAddress, analytics.Referer)
-
-	query, args, err := insert.ToSql()
-	if err != nil {
-		return fmt.Errorf("%s: insert query: %w", op, err)
-	}
-
-	_, err = executor.Exec(ctx, query, args...)
-	if err != nil {
 		return fmt.Errorf("%s: %w", op, err)
 	}
 
 	return nil
 }
 
-func (r *AnalyticsRepository) GetStatsByShortCode(
+func (r *AnalyticsRepository) GetURLInfoByShortCode(
 	ctx context.Context,
 	qe pgxdriver.QueryExecuter,
 	shortCode string,
-	limit uint64,
-) (*entity.AnalyticsStats, error) {
-	const op = "repository.analytics.GetStatsByShortCode"
+) (*entity.URL, error) {
+	const op = "repository.analytics.GetURLInfoByShortCode"
 
-	urlInfo, urlID, err := r.fetchURLInfo(ctx, qe, shortCode, op)
+	sql, args, err := r.db.Select("id", "short_code", "original_url", "is_active", "expires_at", "click_count", "created_at").
+		From("urls").
+		Where(squirrel.Eq{"short_code": shortCode}).
+		ToSql()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	clicksByDay, err := r.fetchClicksByDay(ctx, qe, urlID, op)
-	if err != nil {
-		return nil, err
-	}
-
-	clicksByUA, err := r.fetchClicksByUA(ctx, qe, urlID, op)
-	if err != nil {
-		return nil, err
-	}
-
-	recentClicks, err := r.fetchRecentClicks(ctx, qe, urlID, limit, op)
-	if err != nil {
-		return nil, err
-	}
-
-	return &entity.AnalyticsStats{
-		ShortCode:    urlInfo.ShortCode,
-		OriginalURL:  urlInfo.OriginalURL,
-		TotalClicks:  urlInfo.TotalClicks,
-		CreatedAt:    urlInfo.CreatedAt,
-		ClicksByDay:  clicksByDay,
-		ClicksByUA:   clicksByUA,
-		RecentClicks: recentClicks,
-	}, nil
-}
-
-func (r *AnalyticsRepository) fetchURLInfo(
-	ctx context.Context,
-	qe pgxdriver.QueryExecuter,
-	shortCode, op string,
-) (*urlShortInfo, uuid.UUID, error) {
-	executor := execOrDB(qe, r.db)
-
-	urlSelect := r.db.Select("u.id", "u.short_code", "u.original_url", "u.click_count").
-		From("urls u").
-		Where(squirrel.Eq{"u.short_code": shortCode})
-
-	sql, args, err := urlSelect.ToSql()
-	if err != nil {
-		return nil, uuid.Nil, fmt.Errorf("%s: url select: %w", op, err)
-	}
-
-	var info urlShortInfo
-	var urlID uuid.UUID
-	err = executor.QueryRow(ctx, sql, args...).Scan(
-		&urlID,
-		&info.ShortCode,
-		&info.OriginalURL,
-		&info.TotalClicks,
+	var url entity.URL
+	err = qe.QueryRow(ctx, sql, args...).Scan(
+		&url.ID,
+		&url.ShortCode,
+		&url.OriginalURL,
+		&url.IsActive,
+		&url.ExpiresAt,
+		&url.ClickCount,
+		&url.CreatedAt,
 	)
 	if err != nil {
-		return nil, uuid.Nil, fmt.Errorf("%s: url info: %w", op, err)
-	}
-
-	info.CreatedAt = entity.ExtractTimestampFromUUIDv7(urlID)
-	return &info, urlID, nil
-}
-
-func (r *AnalyticsRepository) fetchClicksByDay(
-	ctx context.Context,
-	qe pgxdriver.QueryExecuter,
-	urlID uuid.UUID,
-	op string,
-) (map[string]int64, error) {
-	query := r.db.Select(
-		"DATE_TRUNC('day', a.clicked_at) as day",
-		"COUNT(*) as clicks",
-	).
-		From("analytics a").
-		Where(squirrel.Eq{"a.url_id": urlID}).
-		GroupBy("day").
-		OrderBy("day DESC").
-		Limit(_recentClicksLimit)
-
-	return r.scanCountMap(ctx, qe, query, op, "day stats")
-}
-
-func (r *AnalyticsRepository) fetchClicksByUA(
-	ctx context.Context,
-	qe pgxdriver.QueryExecuter,
-	urlID uuid.UUID,
-	op string,
-) (map[string]int64, error) {
-	query := r.db.Select("a.user_agent", "COUNT(*) as count").
-		From("analytics a").
-		Where(squirrel.Eq{"a.url_id": urlID}).
-		GroupBy("a.user_agent").
-		OrderBy("count DESC").
-		Limit(_analyticsLimit)
-
-	return r.scanCountMap(ctx, qe, query, op, "ua stats")
-}
-
-func (r *AnalyticsRepository) scanCountMap(
-	ctx context.Context,
-	qe pgxdriver.QueryExecuter,
-	builder squirrel.SelectBuilder,
-	op, label string,
-) (map[string]int64, error) {
-	executor := execOrDB(qe, r.db)
-
-	sql, args, err := builder.ToSql()
-	if err != nil {
-		return nil, fmt.Errorf("%s: %s query: %w", op, label, err)
-	}
-
-	rows, err := executor.Query(ctx, sql, args...)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %s: %w", op, label, err)
-	}
-	defer rows.Close()
-
-	result := make(map[string]int64)
-	for rows.Next() {
-		var key string
-		var count int64
-
-		var day time.Time
-		if rowErr := rows.Scan(&key, &count); rowErr != nil {
-			return nil, fmt.Errorf("%s: %s row: %w", op, label, rowErr)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, entity.ErrDataNotFound
 		}
-		key = day.Format("2006-01-02")
-
-		result[key] = count
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
-	return result, nil
+
+	return &url, nil
 }
 
-func (r *AnalyticsRepository) fetchRecentClicks(
+func (r *AnalyticsRepository) GetClicksByDay(
 	ctx context.Context,
 	qe pgxdriver.QueryExecuter,
 	urlID uuid.UUID,
 	limit uint64,
-	op string,
-) ([]entity.Analytics, error) {
-	executor := execOrDB(qe, r.db)
+) (map[string]int64, error) {
+	const op = "repository.analytics.GetClicksByDay"
 
-	query := r.db.Select("id", "url_id", "user_agent", "ip_address", "referer", "clicked_at").
+	query := r.db.Select(
+		"DATE_TRUNC('day', clicked_at) as day",
+		"COUNT(*) as clicks",
+	).
 		From("analytics").
-		Where(squirrel.Eq{"url_id": urlID}).
+		Where(squirrel.Eq{columnURLID: urlID}).
+		GroupBy("day").
+		OrderBy("day DESC").
+		Limit(limit)
+
+	return r.scanStatsMap(ctx, qe, query, op, true)
+}
+
+func (r *AnalyticsRepository) GetClicksByUA(
+	ctx context.Context,
+	qe pgxdriver.QueryExecuter,
+	urlID uuid.UUID,
+	limit uint64,
+) (map[string]int64, error) {
+	const op = "repository.analytics.GetClicksByUA"
+
+	query := r.db.Select("user_agent", "COUNT(*) as count").
+		From("analytics").
+		Where(squirrel.Eq{columnURLID: urlID}).
+		GroupBy("user_agent").
+		OrderBy("count DESC").
+		Limit(limit)
+
+	return r.scanStatsMap(ctx, qe, query, op, false)
+}
+
+func (r *AnalyticsRepository) GetRecentClicks(
+	ctx context.Context,
+	qe pgxdriver.QueryExecuter,
+	urlID uuid.UUID,
+	limit uint64,
+) ([]entity.Analytics, error) {
+	const op = "repository.analytics.GetRecentClicks"
+
+	query := r.db.Select(_analyticsColumns).
+		From("analytics").
+		Where(squirrel.Eq{columnURLID: urlID}).
 		OrderBy("clicked_at DESC").
 		Limit(limit)
 
 	sql, args, err := query.ToSql()
 	if err != nil {
-		return nil, fmt.Errorf("%s: recent clicks query: %w", op, err)
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	rows, err := executor.Query(ctx, sql, args...)
+	rows, err := qe.Query(ctx, sql, args...)
 	if err != nil {
-		return nil, fmt.Errorf("%s: recent clicks: %w", op, err)
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 	defer rows.Close()
 
 	var clicks []entity.Analytics
 	for rows.Next() {
 		var c entity.Analytics
-		if rowErr := rows.Scan(&c.ID, &c.URLId, &c.UserAgent, &c.IPAddress, &c.Referer, &c.ClickedAt); rowErr != nil {
-			return nil, fmt.Errorf("%s: recent row: %w", op, rowErr)
+		var ip net.IP
+
+		if err = rows.Scan(
+			&c.ID,
+			&c.URLID,
+			&c.UserAgent,
+			&ip,
+			&c.Referer,
+			&c.ClickedAt); err != nil {
+			return nil, fmt.Errorf("%s: %w", op, err)
 		}
+
+		c.IPAddress = ip.String()
 		clicks = append(clicks, c)
 	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
 	return clicks, nil
+}
+
+func (r *AnalyticsRepository) scanStatsMap(
+	ctx context.Context,
+	qe pgxdriver.QueryExecuter,
+	builder squirrel.SelectBuilder,
+	op string,
+	isDate bool,
+) (map[string]int64, error) {
+	sql, args, err := builder.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("%s: to sql: %w", op, err)
+	}
+
+	rows, err := qe.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, fmt.Errorf("%s: query: %w", op, err)
+	}
+	defer rows.Close()
+
+	result := make(map[string]int64)
+	for rows.Next() {
+		var count int64
+		var key string
+
+		if isDate {
+			var t time.Time
+			if err = rows.Scan(&t, &count); err != nil {
+				return nil, fmt.Errorf("%s: scan date: %w", op, err)
+			}
+			key = t.Format("2006-01-02")
+		} else {
+			if err = rows.Scan(&key, &count); err != nil {
+				return nil, fmt.Errorf("%s: scan key: %w", op, err)
+			}
+		}
+		result[key] = count
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("%s: rows error: %w", op, err)
+	}
+
+	return result, nil
 }

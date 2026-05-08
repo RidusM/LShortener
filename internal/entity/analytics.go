@@ -7,24 +7,20 @@ import (
 )
 
 type Analytics struct {
-	ID        uuid.UUID `json:"id"`
-	URLId     uuid.UUID `json:"url_id"`
-	UserAgent string    `json:"user_agent"`
-	IPAddress string    `json:"ip_address"`
-	Referer   string    `json:"referer,omitempty"`
-	ClickedAt time.Time `json:"clicked_at"`
+	ID        uuid.UUID
+	URLID     uuid.UUID
+	UserAgent string
+	IPAddress string
+	Referer   string
+	ClickedAt time.Time
 }
 
 type AnalyticsStats struct {
-	ShortCode    string           `json:"short_code"`
-	OriginalURL  string           `json:"original_url"`
-	TotalClicks  int64            `json:"total_clicks"`
-	ClicksByDay  map[string]int64 `json:"clicks_by_day"`
-	ClicksByUA   map[string]int64 `json:"clicks_by_user_agent"`
-	RecentClicks []Analytics      `json:"recent_clicks"`
-	CreatedAt    time.Time        `json:"created_at"`
-}
-
-func (a *Analytics) GetTime() time.Time {
-	return a.ClickedAt
+	ShortCode    string
+	OriginalURL  string
+	TotalClicks  int64
+	ClicksByDay  map[string]int64
+	ClicksByUA   map[string]int64
+	RecentClicks []Analytics
+	CreatedAt    time.Time
 }

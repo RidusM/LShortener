@@ -7,8 +7,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
       redis:
         condition: service_started
       db-migrator:
@@ -26,9 +24,9 @@ services:
 
   db:
     image: postgres:17-alpine
-    container_name: notify-db
+    container_name: shortener-db
     environment:
-      POSTGRES_DB: ${DB_NAME:-notify_db}
+      POSTGRES_DB: ${DB_NAME:-shortener_db}
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
     ports:
@@ -41,7 +39,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-notify_db}",
+          "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-shortener_db}",
         ]
       interval: 10s
       timeout: 5s
@@ -51,7 +49,7 @@ services:
 
   db-migrator:
     image: migrate/migrate
-    container_name: notifier-db-migrator
+    container_name: lshortener-db-migrator
     env_file:
       - ./configs/dev.env
     depends_on:
@@ -71,7 +69,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: notifier-redis
+    container_name: lshortener-redis
     command:
       [
         "redis-server",

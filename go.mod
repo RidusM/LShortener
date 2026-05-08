@@ -1,10 +1,13 @@
 module lshortener
 
-go 1.25.0
+go 1.25.5
+
+replace github.com/wb-go/wbf => github.com/RidusM/wbf v0.0.0-20260507102658-507d6c1d9e08
 
 require (
 	github.com/Masterminds/squirrel v1.5.4
 	github.com/gin-gonic/gin v1.9.1
+	github.com/go-redis/redis/v8 v8.11.5
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgconn v1.14.3
 	github.com/jackc/pgx/v5 v5.8.0
@@ -12,7 +15,6 @@ require (
 	github.com/swaggo/gin-swagger v1.6.1
 	github.com/swaggo/swag v1.16.6
 	github.com/wb-go/wbf v0.0.0-00010101000000-000000000000
-	go.uber.org/mock v0.6.0
 	golang.org/x/sync v0.17.0
 )
 
@@ -34,7 +36,6 @@ require (
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.14.0 // indirect
-	github.com/go-redis/redis/v8 v8.11.5 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/ilyakaznacheev/cleanenv v1.5.0 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
@@ -77,5 +78,3 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	olympos.io/encoding/edn v0.0.0-20201019073823-d3554ca0b0a3 // indirect
 )
-
-replace github.com/wb-go/wbf => github.com/RidusM/wbf v0.0.0-20260121075909-e83e5713b713

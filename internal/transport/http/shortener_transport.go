@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"net/http"
 
 	"lshortener/internal/entity"
 	"lshortener/internal/service"
@@ -10,20 +11,22 @@ import (
 	"github.com/wb-go/wbf/logger"
 )
 
+const _maxRequestBodySize = 1 << 20
+
 type ShortenerService interface {
-	CreateShortURL(ctx context.Context, req CreateShortURLRequest) (*service.CreateURLResponse, error)
+	CreateShortURL(ctx context.Context, req service.CreateURLRequest) (*service.CreateURLResponse, error)
 	ResolveShortURL(ctx context.Context, shortCode string, clickInfo service.ClickInfo) (string, error)
 	GetAnalytics(ctx context.Context, shortCode string) (*entity.AnalyticsStats, error)
 }
 
 type ShortenerHandler struct {
-	svc    *service.ShortenerService
+	svc    ShortenerService
 	log    logger.Logger
 	router *gin.Engine
 }
 
 func NewShortenerHandler(
-	svc *service.ShortenerService,
+	svc ShortenerService,
 	log logger.Logger,
 ) *ShortenerHandler {
 	h := &ShortenerHandler{
@@ -32,6 +35,10 @@ func NewShortenerHandler(
 	}
 
 	router := gin.New()
+
+	router.Use(func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, _maxRequestBodySize)
+	})
 
 	router.Use(h.loggingMiddleware())
 	router.Use(h.requestIDMiddleware())

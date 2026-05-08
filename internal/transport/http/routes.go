@@ -3,6 +3,8 @@ package handler
 import (
 	"net/http"
 
+	_ "lshortener/docs" // required for Swagger
+
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -10,7 +12,7 @@ import (
 
 // @title Link Shortener API
 // @version 1.0
-// @description API для сокращения ссылок
+// @description Link shortening API
 // @termosOfService http://swagger.io/terms
 // @contect.name RidusM
 // @contect.email stormkillpeople@gmail.com
@@ -20,12 +22,17 @@ import (
 // @BasePath /
 func (h *ShortenerHandler) setupRoutes() {
 	h.router.GET("/health", h.Health)
+
 	h.router.POST("/shorten", h.CreateShortURL)
-	h.router.GET("/analytics/:short_code", h.GetAnalytics)
+	h.router.GET("/:short_code", h.RedirectToOriginal)
+	h.router.GET("/:short_code/analytics", h.GetAnalytics)
 
 	h.router.GET("/", func(c *gin.Context) {
 		c.HTML(http.StatusOK, "index.html", gin.H{})
 	})
 
+	h.router.GET("/expired", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "expired.html", gin.H{})
+	})
 	h.router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 }

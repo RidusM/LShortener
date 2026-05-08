@@ -22,54 +22,117 @@ func Run(ctx context.Context, cfg *config.Config, log logger.Logger) error {
 	var (
 		db  *pgxdriver.Postgres
 		rdb *redis.Client
-		tm  transaction.Manager
-		svc *service.ShortenerService
 		err error
 	)
 
 	defer func() {
-		if rdb != nil {
-			if err = rdb.Close(); err != nil {
-				log.Error("failed to close Redis client", "error", err)
-			} else {
-				log.Info("Redis client closed")
-			}
-		}
-		if db != nil {
-			db.Close()
-			log.Info("database connection pool closed")
-		}
+		closeResources(ctx, db, rdb, log)
 	}()
-	db, err = initDatabase(&cfg.Database, log)
-	if err != nil {
-		return fmt.Errorf("init databse: %w", err)
-	}
-	log.Info("database initialized successfully")
 
-	tm, err = initTransactionManager(db, log)
+	db, rdb, err = initInfrastructure(ctx, cfg, log)
+	if err != nil {
+		return err
+	}
+
+	tm, err := transaction.NewManager(db, log)
 	if err != nil {
 		return fmt.Errorf("init transaction manager: %w", err)
 	}
 
-	rdb = initCache(&cfg.Cache)
-	log.Info("cache initialized successfully")
+	kg := keygen.NewBase62Generator()
 
-	svc, err = initShortenerService(&cfg.Service, db, tm, rdb, log)
-	if err != nil {
-		return fmt.Errorf("init shortener service: %w", err)
-	}
+	handler := initHandler(cfg, db, rdb, tm, kg, log)
 
 	eg, ctx := errgroup.WithContext(ctx)
 
-	initHTTPServer(ctx, eg, &cfg.HTTP, svc, log)
-	if err = eg.Wait(); err != nil {
-		if !errors.Is(err, context.Canceled) {
-			log.Error("application shutdown with error", "error", err)
-			return fmt.Errorf("application shutdown error: %w", err)
-		}
+	eg.Go(func() error {
+		return startHTTPServer(ctx, handler, &cfg.HTTP, log)
+	})
+
+	if egErr := eg.Wait(); egErr != nil && !errors.Is(egErr, context.Canceled) {
+		return fmt.Errorf("app execution failed: %w", egErr)
 	}
 
-	log.Info("application shutdown complete")
+	return nil
+}
+
+func closeResources(
+	ctx context.Context,
+	db *pgxdriver.Postgres,
+	rdb *redis.Client,
+	log logger.Logger,
+) {
+	if db != nil {
+		db.Close()
+		log.LogAttrs(ctx, logger.InfoLevel, "database connection closed")
+	}
+	if rdb != nil {
+		if closeErr := rdb.Close(); closeErr != nil {
+			log.LogAttrs(ctx, logger.WarnLevel, "failed to close cache",
+				logger.Any("error", closeErr),
+			)
+		}
+	}
+	log.LogAttrs(ctx, logger.InfoLevel, "all resources cleaned up")
+}
+
+func initInfrastructure(
+	ctx context.Context,
+	cfg *config.Config,
+	log logger.Logger,
+) (*pgxdriver.Postgres, *redis.Client, error) {
+	db, err := initDatabase(&cfg.Database, log)
+	if err != nil {
+		return nil, nil, fmt.Errorf("init database: %w", err)
+	}
+	log.LogAttrs(ctx, logger.InfoLevel, "database initialized successfully")
+
+	rdb, err := initCache(ctx, &cfg.Cache)
+	if err != nil {
+		db.Close()
+		return nil, nil, fmt.Errorf("init cache: %w", err)
+	}
+	log.LogAttrs(ctx, logger.InfoLevel, "cache initialized successfully")
+
+	return db, rdb, nil
+}
+
+func initHandler(
+	cfg *config.Config,
+	db *pgxdriver.Postgres,
+	rdb *redis.Client,
+	tm transaction.Manager,
+	kg keygen.Generator,
+	log logger.Logger,
+) *handler.ShortenerHandler {
+	urlRepo := repository.NewURLRepository(db)
+	analyticsRepo := repository.NewAnalyticsRepository(db)
+	cacheRepo := repository.NewCacheRepository(rdb)
+
+	svc := service.NewShortenerService(
+		urlRepo,
+		analyticsRepo,
+		cacheRepo,
+		tm,
+		kg,
+		log,
+		service.DefaultTTL(cfg.Service.DefaultTTL),
+		service.BaseURL(cfg.Service.BaseURL),
+		service.ShortCodeLength(cfg.Service.ShortCodeLength),
+		service.QueryLimit(cfg.Service.QueryLimit),
+		service.MaxRetries(cfg.Service.MaxRetries),
+		service.RetryDelay(cfg.Service.RetryDelay),
+	)
+
+	handler := handler.NewShortenerHandler(svc, log)
+	return handler
+}
+
+func startHTTPServer(ctx context.Context, h *handler.ShortenerHandler, cfg *config.HTTP, log logger.Logger) error {
+	server := handler.NewHTTPServer(h, cfg, log)
+	if err := server.Start(ctx); err != nil {
+		return fmt.Errorf("start http server: %w", err)
+	}
 	return nil
 }
 
@@ -88,62 +151,15 @@ func initDatabase(cfg *config.Database, log logger.Logger) (*pgxdriver.Postgres,
 	return db, nil
 }
 
-func initTransactionManager(db *pgxdriver.Postgres, log logger.Logger) (transaction.Manager, error) {
-	tm, err := transaction.NewManager(db, log)
-	if err != nil {
-		return nil, fmt.Errorf("create transaction manager: %w", err)
+func initCache(ctx context.Context, cfg *config.Cache) (*redis.Client, error) {
+	initCtx, cancel := context.WithTimeout(ctx, cfg.DialTimeout)
+	defer cancel()
+
+	rdb := redis.New(cfg.Addr, cfg.Password, cfg.DB)
+
+	if err := rdb.Ping(initCtx); err != nil {
+		_ = rdb.Close()
+		return nil, fmt.Errorf("cache ping failed: %w", err)
 	}
-	return tm, nil
-}
-
-func initCache(cfg *config.Cache) *redis.Client {
-	return redis.New(cfg.Addr, cfg.Password, 0)
-}
-
-func initShortenerService(
-	cfg *config.Service,
-	db *pgxdriver.Postgres,
-	tm transaction.Manager,
-	rdb *redis.Client,
-	log logger.Logger,
-) (*service.ShortenerService, error) {
-	urlRepo := repository.NewURLRepository(db)
-	analyticRepo := repository.NewAnalyticsRepository(db)
-	cacheRepo := repository.NewCacheRepository(rdb)
-
-	svc, err := service.NewShortenerService(
-		urlRepo,
-		analyticRepo,
-		cacheRepo,
-		tm,
-		log,
-		keygen.NewBase62Generator(),
-
-		service.WithShortCodeLength(cfg.ShortCodeLength),
-		service.WithDefaultTTL(cfg.DefaultTTL),
-		service.WithBaseURL(cfg.BaseURL),
-		service.WithMaxRetries(cfg.MaxRetries),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create notify service: %w", err)
-	}
-	return svc, nil
-}
-
-func initHTTPServer(
-	ctx context.Context,
-	eg *errgroup.Group,
-	cfg *config.HTTP,
-	svc *service.ShortenerService,
-	log logger.Logger,
-) {
-	sHandler := handler.NewShortenerHandler(svc, log)
-	httpServer := handler.NewHTTPServer(sHandler, cfg, log)
-
-	eg.Go(func() error {
-		if err := httpServer.Start(ctx); err != nil && !errors.Is(err, context.Canceled) {
-			return fmt.Errorf("http server error: %w", err)
-		}
-		return nil
-	})
+	return rdb, nil
 }

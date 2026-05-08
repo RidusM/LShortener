@@ -17,14 +17,14 @@ definitions:
           curl/7.68.0: 12
         type: object
       created_at:
-        example: "2023-10-27T10:00:00Z"
+        example: "2026-05-07T10:00:00Z"
         type: string
       original_url:
         example: https://example.com/very/long/url
         type: string
       recent_clicks:
         items:
-          $ref: '#/definitions/handler.ClickDetail'
+          $ref: '#/definitions/handler.ClickInfo'
         type: array
       short_code:
         example: abc123
@@ -33,10 +33,10 @@ definitions:
         example: 1234
         type: integer
     type: object
-  handler.ClickDetail:
+  handler.ClickInfo:
     properties:
       clicked_at:
-        example: "2023-10-27T10:00:00Z"
+        example: "2026-05-07T10:00:00Z"
         type: string
       ip_address:
         example: 192.168.1.100
@@ -48,13 +48,15 @@ definitions:
         example: Mozilla/5.0 (Windows NT 10.0; Win64; x64)
         type: string
     type: object
-  handler.CreateShortURLRequest:
+  handler.CreateURLRequest:
     properties:
       custom_alias:
-        example: my-link
+        example: mylink
+        maxLength: 50
+        minLength: 3
         type: string
       expires_at:
-        example: "2023-10-27T10:00:00Z"
+        example: "2026-12-31T23:59:59Z"
         type: string
       original_url:
         example: https://example.com/very/long/url
@@ -62,16 +64,16 @@ definitions:
     required:
     - original_url
     type: object
-  handler.CreateShortURLResponse:
+  handler.CreateURLResponse:
     properties:
       created_at:
-        example: "2023-10-27T10:00:00Z"
+        example: "2026-05-07T10:00:00Z"
         type: string
       custom_alias:
-        example: my-link
+        example: mylink
         type: string
       expires_at:
-        example: "2023-10-27T10:00:00Z"
+        example: "2026-12-31T23:59:59Z"
         type: string
       id:
         example: 550e8400-e29b-41d4-a716-446655440001
@@ -92,7 +94,7 @@ definitions:
         example: not_found
         type: string
       details:
-        example: link with short_code does not exist
+        example: link with short_code abc123 does not exist
         type: string
       error:
         example: link not found
@@ -101,7 +103,7 @@ definitions:
 host: localhost:8080
 info:
   contact: {}
-  description: API для сокращения ссылок
+  description: Link shortening API
   license:
     name: MIT-0
     url: https://github.com/aws/mit-0
@@ -110,9 +112,9 @@ info:
 paths:
   /{short_code}:
     get:
-      description: Перенаправляет на оригинальную ссылку по короткому коду
+      description: Redirects to the original link using a short code
       parameters:
-      - description: Короткий код ссылки
+      - description: Link short code
         in: path
         minLength: 1
         name: short_code
@@ -124,27 +126,27 @@ paths:
           schema:
             type: string
         "400":
-          description: Отсутствует short_code
+          description: Missing short_code
           schema:
             $ref: '#/definitions/handler.ErrorResponse'
         "404":
-          description: Ссылка не найдена
+          description: Link not found
           schema:
             $ref: '#/definitions/handler.ErrorResponse'
         "500":
-          description: Внутренняя ошибка
+          description: Internal error
           schema:
             $ref: '#/definitions/handler.ErrorResponse'
-      summary: Переход по короткой ссылке
+      summary: Follow a short link
       tags:
       - ShortURL
   /{short_code}/analytics:
     get:
       consumes:
       - application/json
-      description: Возвращает статистику переходов по короткому коду
+      description: Returns click statistics for a short code
       parameters:
-      - description: Короткий код ссылки
+      - description: Link short code
         in: path
         minLength: 1
         name: short_code
@@ -154,52 +156,68 @@ paths:
       - application/json
       responses:
         "200":
-          description: Аналитика получена
+          description: Analytics received
           schema:
             $ref: '#/definitions/handler.AnalyticsResponse'
         "400":
-          description: Отсутствует short_code
+          description: Missing short_code
           schema:
             $ref: '#/definitions/handler.ErrorResponse'
         "404":
-          description: Ссылка не найдена
+          description: Link not found
           schema:
             $ref: '#/definitions/handler.ErrorResponse'
         "500":
-          description: Внутренняя ошибка
+          description: Internal error
           schema:
             $ref: '#/definitions/handler.ErrorResponse'
-      summary: Получить аналитику по короткой ссылке
+      summary: Get analytics for a short link
       tags:
       - ShortURL
+  /health:
+    get:
+      description: Return service status and current timestamp. No authentication
+        required.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Service is healthy
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Health check endpoint
+      tags:
+      - System
   /shorten:
     post:
       consumes:
       - application/json
-      description: Создает сокращенную ссылку из оригинальной
+      description: Creates a shortened link from the original
       parameters:
-      - description: Данные для создания короткой ссылки
+      - description: Data for creating a short link
         in: body
         name: request
         required: true
         schema:
-          $ref: '#/definitions/handler.CreateShortURLRequest'
+          $ref: '#/definitions/handler.CreateURLRequest'
       produces:
       - application/json
       responses:
         "201":
-          description: Короткая ссылка создана
+          description: Short link created
           schema:
-            $ref: '#/definitions/handler.CreateShortURLResponse'
+            $ref: '#/definitions/handler.CreateURLResponse'
         "400":
-          description: Ошибка валидации
+          description: Validation error
           schema:
             $ref: '#/definitions/handler.ErrorResponse'
         "500":
-          description: Внутренняя ошибка сервера
+          description: Internal server error
           schema:
             $ref: '#/definitions/handler.ErrorResponse'
-      summary: Создать сокращенную ссылку
+      summary: Create a shortened link
       tags:
       - ShortURL
 swagger: "2.0"

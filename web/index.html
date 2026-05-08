@@ -1,1 +1,1209 @@
-<<empty file>> </empty>
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LSHortener — сокращалка ссылок</title>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Nunito+Sans:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --coral: #FF6B6B;
+      --coral-light: #FF8E8E;
+      --coral-dark: #E85555;
+      --sky: #4ECDC4;
+      --sky-light: #A8EDEA;
+      --yellow: #FFE66D;
+      --bg: #FFF8F3;
+      --white: #FFFFFF;
+      --text: #2D2D2D;
+      --text-soft: #7A7A7A;
+      --card-shadow: 0 8px 32px rgba(255,107,107,0.12);
+      --radius-lg: 24px;
+      --radius-xl: 32px;
+      --radius-pill: 100px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Nunito Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .bg-blobs {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+
+    .blob {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.25;
+    }
+
+    .blob-1 { width: 500px; height: 500px; background: var(--coral); top: -150px; right: -100px; }
+    .blob-2 { width: 400px; height: 400px; background: var(--sky); bottom: -100px; left: -80px; }
+    .blob-3 { width: 300px; height: 300px; background: var(--yellow); top: 40%; left: 30%; }
+
+    .page { position: relative; z-index: 1; }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 28px 48px;
+    }
+
+    .logo {
+      font-family: 'Nunito', sans-serif;
+      font-weight: 900;
+      font-size: 26px;
+      color: var(--coral);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+
+    .logo-icon {
+      width: 38px; height: 38px;
+      background: var(--coral);
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+
+    .hero {
+      text-align: center;
+      padding: 40px 24px 56px;
+      max-width: 680px;
+      margin: 0 auto;
+    }
+
+    .hero-badge {
+      display: inline-block;
+      background: var(--yellow);
+      color: #6B5B00;
+      font-family: 'Nunito', sans-serif;
+      font-weight: 800;
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      padding: 6px 18px;
+      border-radius: var(--radius-pill);
+      margin-bottom: 20px;
+      animation: floatBadge 3s ease-in-out infinite;
+    }
+
+    @keyframes floatBadge {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-5px); }
+    }
+
+    .hero h1 {
+      font-family: 'Nunito', sans-serif;
+      font-weight: 900;
+      font-size: clamp(34px, 6vw, 56px);
+      line-height: 1.1;
+      margin-bottom: 16px;
+    }
+
+    .hero h1 .accent { color: var(--coral); }
+
+    .hero p {
+      font-size: 18px;
+      color: var(--text-soft);
+      line-height: 1.6;
+    }
+
+    /* Main card */
+    .main-card {
+      background: var(--white);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--card-shadow);
+      padding: 36px;
+      max-width: 640px;
+      margin: 0 auto 16px;
+    }
+
+    .input-group {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .url-input-wrap {
+      flex: 1;
+      position: relative;
+    }
+
+    .url-input-wrap .icon {
+      position: absolute;
+      left: 18px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 20px;
+      pointer-events: none;
+    }
+
+    .url-input {
+      width: 100%;
+      padding: 18px 18px 18px 52px;
+      font-family: 'Nunito Sans', sans-serif;
+      font-size: 16px;
+      border: 2.5px solid #EDE8E3;
+      border-radius: var(--radius-lg);
+      outline: none;
+      background: #FAFAFA;
+      color: var(--text);
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .url-input:focus {
+      border-color: var(--coral);
+      box-shadow: 0 0 0 4px rgba(255,107,107,0.1);
+      background: var(--white);
+    }
+
+    .url-input::placeholder { color: #BDBDBD; }
+
+    .btn-shorten {
+      font-family: 'Nunito', sans-serif;
+      font-weight: 800;
+      font-size: 16px;
+      padding: 18px 28px;
+      background: var(--coral);
+      color: white;
+      border: none;
+      border-radius: var(--radius-lg);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s, transform 0.12s, box-shadow 0.15s;
+      box-shadow: 0 4px 16px rgba(255,107,107,0.35);
+    }
+
+    .btn-shorten:hover { background: var(--coral-dark); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(255,107,107,0.4); }
+    .btn-shorten:active { transform: translateY(0); }
+    .btn-shorten:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+    .options-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      color: var(--text-soft);
+      cursor: pointer;
+      margin-bottom: 20px;
+      user-select: none;
+      width: fit-content;
+      font-family: 'Nunito', sans-serif;
+      font-weight: 600;
+    }
+
+    .options-toggle:hover { color: var(--coral); }
+    .toggle-arrow { transition: transform 0.2s; display: inline-block; }
+    .toggle-arrow.open { transform: rotate(180deg); }
+
+    .options-panel {
+      display: none;
+      flex-direction: column;
+      gap: 16px;
+      margin-bottom: 24px;
+      animation: slideDown 0.2s ease;
+    }
+
+    .options-panel.open { display: flex; }
+
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .option-field label {
+      display: block;
+      font-family: 'Nunito', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    .option-field label .sub { font-weight: 400; color: var(--text-soft); font-size: 12px; }
+
+    .option-input {
+      width: 100%;
+      padding: 14px 18px;
+      font-family: 'Nunito Sans', sans-serif;
+      font-size: 15px;
+      border: 2px solid #EDE8E3;
+      border-radius: 16px;
+      outline: none;
+      background: #FAFAFA;
+      color: var(--text);
+      transition: border-color 0.2s;
+    }
+
+    .option-input:focus { border-color: var(--coral); background: var(--white); }
+
+    .error-box {
+      display: none;
+      background: #FFF0F0;
+      border: 2px solid #FFD0D0;
+      border-radius: var(--radius-lg);
+      padding: 18px 20px;
+      font-family: 'Nunito', sans-serif;
+      font-weight: 700;
+      color: #C0392B;
+      font-size: 15px;
+      animation: shake 0.4s ease;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-6px); }
+      40% { transform: translateX(6px); }
+      60% { transform: translateX(-4px); }
+      80% { transform: translateX(4px); }
+    }
+
+    .result-box {
+      display: none;
+      background: linear-gradient(135deg, #FFF5F5, #F0FDFC);
+      border: 2px solid rgba(78,205,196,0.3);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    @keyframes popIn {
+      from { opacity: 0; transform: scale(0.93); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    .result-label {
+      font-size: 14px;
+      color: var(--text-soft);
+      margin-bottom: 10px;
+      font-family: 'Nunito', sans-serif;
+      font-weight: 700;
+    }
+
+    .result-url-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .result-url {
+      font-family: 'Nunito', sans-serif;
+      font-weight: 800;
+      font-size: clamp(17px, 3vw, 23px);
+      color: var(--coral);
+      word-break: break-all;
+      flex: 1;
+    }
+
+    .btn-copy {
+      font-family: 'Nunito', sans-serif;
+      font-weight: 800;
+      font-size: 14px;
+      padding: 12px 20px;
+      background: var(--sky);
+      color: white;
+      border: none;
+      border-radius: 14px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s, transform 0.12s;
+      flex-shrink: 0;
+    }
+
+    .btn-copy:hover { background: #3ab8af; transform: scale(1.03); }
+    .btn-copy.copied { background: #5BBF8A; }
+
+    .result-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .result-chip {
+      background: white;
+      border-radius: var(--radius-pill);
+      padding: 6px 14px;
+      font-size: 13px;
+      color: var(--text-soft);
+      font-family: 'Nunito', sans-serif;
+      font-weight: 600;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+
+    .btn-analytics {
+      background: none;
+      border: 2px solid #EDE8E3;
+      border-radius: var(--radius-pill);
+      font-family: 'Nunito', sans-serif;
+      font-weight: 700;
+      font-size: 13px;
+      padding: 6px 16px;
+      cursor: pointer;
+      color: var(--text-soft);
+      transition: all 0.15s;
+    }
+
+    .btn-analytics:hover { border-color: var(--coral); color: var(--coral); }
+
+    /* How it works */
+    .how-section {
+      max-width: 640px;
+      margin: 40px auto 0;
+      padding: 0 4px;
+      text-align: center;
+    }
+
+    .how-title {
+      font-family: 'Nunito', sans-serif;
+      font-weight: 900;
+      font-size: 20px;
+      margin-bottom: 20px;
+    }
+
+    .how-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+
+    .how-card {
+      background: white;
+      border-radius: 20px;
+      padding: 22px 16px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+    }
+
+    .how-emoji { font-size: 30px; margin-bottom: 8px; }
+
+    .how-card b {
+      display: block;
+      font-family: 'Nunito', sans-serif;
+      font-weight: 800;
+      margin-bottom: 4px;
+    }
+
+    .how-card span { font-size: 13px; color: var(--text-soft); }
+
+    /* Analytics section */
+    .analytics-section {
+      display: none;
+      max-width: 640px;
+      margin: 32px auto 0;
+      padding: 0 4px;
+      animation: fadeUp 0.3s ease;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .section-title {
+      font-family: 'Nunito', sans-serif;
+      font-weight: 900;
+      font-size: 22px;
+      margin-bottom: 20px;
+    }
+
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background: var(--white);
+      border-radius: 20px;
+      padding: 22px 16px;
+      text-align: center;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+    }
+
+    .stat-emoji { font-size: 28px; margin-bottom: 8px; }
+
+    .stat-num {
+      font-family: 'Nunito', sans-serif;
+      font-weight: 900;
+      font-size: 34px;
+      color: var(--coral);
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .stat-name {
+      font-size: 13px;
+      color: var(--text-soft);
+      font-family: 'Nunito', sans-serif;
+      font-weight: 600;
+    }
+
+    .chart-card {
+      background: var(--white);
+      border-radius: 20px;
+      padding: 24px;
+      margin-bottom: 14px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+    }
+
+    .chart-title {
+      font-family: 'Nunito', sans-serif;
+      font-weight: 800;
+      font-size: 16px;
+      margin-bottom: 16px;
+    }
+
+    .bar-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .bar-label { font-size: 13px; color: var(--text-soft); width: 80px; flex-shrink: 0; text-align: right; }
+
+    .bar-track {
+      flex: 1;
+      height: 10px;
+      background: #F0EBE5;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--coral), var(--coral-light));
+      border-radius: 10px;
+      transition: width 0.8s cubic-bezier(0.16,1,0.3,1);
+    }
+
+    .bar-count {
+      font-family: 'Nunito', sans-serif;
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--text);
+      width: 28px;
+      text-align: right;
+    }
+
+    .clicks-list { display: flex; flex-direction: column; gap: 10px; }
+
+    .click-item {
+      background: var(--white);
+      border-radius: 16px;
+      padding: 14px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+
+    .click-info { flex: 1; min-width: 0; }
+
+    .click-time {
+      font-family: 'Nunito', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 2px;
+    }
+
+    .click-detail { font-size: 12px; color: var(--text-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .click-ip {
+      font-family: 'Nunito', sans-serif;
+      font-weight: 700;
+      font-size: 12px;
+      color: var(--sky);
+      background: rgba(78,205,196,0.12);
+      padding: 4px 10px;
+      border-radius: 8px;
+      flex-shrink: 0;
+    }
+
+    .empty-state { text-align: center; padding: 40px; color: var(--text-soft); }
+    .empty-state .big { font-size: 48px; margin-bottom: 12px; }
+    .empty-state p { font-family: 'Nunito', sans-serif; font-weight: 600; line-height: 1.6; }
+
+    footer { text-align: center; padding: 48px 24px 32px; color: var(--text-soft); font-size: 14px; }
+
+    .spinner-wrap { display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .spinner { width: 18px; height: 18px; border: 3px solid rgba(255,255,255,0.4); border-top-color: white; border-radius: 50%; animation: spin 0.6s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .api-config {
+      max-width: 640px;
+      margin: 0 auto 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 8px;
+      opacity: 0.5;
+      transition: opacity 0.2s;
+    }
+
+    .api-config:hover { opacity: 1; }
+    .api-config label { font-size: 12px; color: var(--text-soft); white-space: nowrap; }
+    .api-config input { flex: 1; font-family: 'Nunito Sans', sans-serif; font-size: 12px; color: var(--text-soft); background: transparent; border: none; border-bottom: 1px dashed #CCC; outline: none; padding: 2px 0; }
+
+    /* Check stats section */
+    .check-stats-section {
+      max-width: 640px;
+      margin: 40px auto 0;
+      padding: 0 4px;
+    }
+
+    .check-stats-card {
+      background: white;
+      border-radius: var(--radius-xl);
+      box-shadow: var(--card-shadow);
+      padding: 28px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .check-stats-icon { font-size: 32px; }
+
+    .check-stats-title {
+      font-family: 'Nunito', sans-serif;
+      font-weight: 800;
+      font-size: 18px;
+      margin-bottom: 4px;
+    }
+
+    .check-stats-sub {
+      font-size: 14px;
+      color: var(--text-soft);
+    }
+
+    .check-stats-input-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .check-stats-input-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      background: #FAFAFA;
+      border: 2.5px solid #EDE8E3;
+      border-radius: var(--radius-lg);
+      padding: 0 18px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      overflow: hidden;
+    }
+
+    .check-stats-input-wrap:focus-within {
+      border-color: var(--coral);
+      box-shadow: 0 0 0 4px rgba(255,107,107,0.1);
+      background: white;
+    }
+
+    .check-stats-prefix {
+      font-size: 14px;
+      color: #BDBDBD;
+      white-space: nowrap;
+      flex-shrink: 0;
+      padding-right: 2px;
+    }
+
+    .check-stats-input {
+      flex: 1;
+      min-width: 0;
+      padding: 16px 0;
+      font-family: 'Nunito', sans-serif;
+      font-weight: 700;
+      font-size: 16px;
+      border: none;
+      outline: none;
+      background: transparent;
+      color: var(--text);
+    }
+
+    .check-stats-input::placeholder { color: #BDBDBD; font-weight: 400; }
+
+    .btn-check {
+      font-family: 'Nunito', sans-serif;
+      font-weight: 800;
+      font-size: 15px;
+      padding: 16px 24px;
+      background: var(--sky);
+      color: white;
+      border: none;
+      border-radius: var(--radius-lg);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s, transform 0.12s, box-shadow 0.15s;
+      box-shadow: 0 4px 14px rgba(78,205,196,0.35);
+      flex-shrink: 0;
+    }
+
+    .btn-check:hover { background: #3ab8af; transform: translateY(-2px); box-shadow: 0 8px 20px rgba(78,205,196,0.4); }
+    .btn-check:active { transform: translateY(0); }
+    .btn-check:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+    /* Expired modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(45, 45, 45, 0.5);
+      backdrop-filter: blur(6px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      animation: overlayIn 0.25s ease;
+    }
+
+    .modal-overlay.open { display: flex; }
+
+    @keyframes overlayIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .modal-card {
+      background: white;
+      border-radius: 32px;
+      padding: 48px 40px 40px;
+      max-width: 420px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 24px 80px rgba(255,107,107,0.2);
+      animation: modalCardIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      position: relative;
+    }
+
+    @keyframes modalCardIn {
+      from { opacity: 0; transform: scale(0.88) translateY(20px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .modal-icon-wrap {
+      position: relative;
+      width: 100px;
+      height: 100px;
+      margin: 0 auto 24px;
+    }
+
+    .modal-icon {
+      width: 100px;
+      height: 100px;
+      background: #FFF5F5;
+      border-radius: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 52px;
+      animation: iconPulse 2.5s ease-in-out infinite;
+    }
+
+    @keyframes iconPulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.06); }
+    }
+
+    .modal-badge {
+      position: absolute;
+      top: -8px;
+      right: -12px;
+      background: var(--coral);
+      color: white;
+      font-family: 'Nunito', sans-serif;
+      font-weight: 900;
+      font-size: 11px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      box-shadow: 0 4px 12px rgba(255,107,107,0.4);
+      animation: badgePop 0.4s cubic-bezier(0.175,0.885,0.32,1.275) 0.2s both;
+    }
+
+    @keyframes badgePop {
+      from { transform: scale(0); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    .modal-title {
+      font-family: 'Nunito', sans-serif;
+      font-weight: 900;
+      font-size: 26px;
+      line-height: 1.2;
+      margin-bottom: 12px;
+    }
+
+    .modal-sub {
+      font-size: 15px;
+      color: var(--text-soft);
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+
+    .modal-info {
+      background: #FFF5F5;
+      border: 2px solid #FFE0E0;
+      border-radius: 16px;
+      padding: 14px 18px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .modal-info-label { font-size: 13px; color: var(--text-soft); font-family: 'Nunito', sans-serif; font-weight: 600; }
+    .modal-info-value { font-family: 'Nunito', sans-serif; font-weight: 800; font-size: 13px; color: var(--coral); }
+
+    .modal-actions { display: flex; flex-direction: column; gap: 10px; }
+
+    .modal-btn-primary {
+      font-family: 'Nunito', sans-serif;
+      font-weight: 800;
+      font-size: 15px;
+      padding: 15px 24px;
+      background: var(--coral);
+      color: white;
+      border: none;
+      border-radius: 16px;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.12s, box-shadow 0.15s;
+      box-shadow: 0 4px 16px rgba(255,107,107,0.35);
+    }
+
+    .modal-btn-primary:hover { background: #E85555; transform: translateY(-2px); box-shadow: 0 8px 20px rgba(255,107,107,0.4); }
+
+    .modal-btn-ghost {
+      font-family: 'Nunito', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      padding: 13px 24px;
+      background: transparent;
+      color: var(--text-soft);
+      border: 2px solid #EDE8E3;
+      border-radius: 16px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .modal-btn-ghost:hover { border-color: #CCC; color: var(--text); }
+
+    @media (max-width: 540px) {
+      header { padding: 20px 24px; }
+      .main-card { padding: 24px 20px; }
+      .input-group { flex-direction: column; }
+      .btn-shorten { width: 100%; }
+      .stats-row, .how-grid { grid-template-columns: 1fr 1fr; }
+      .stats-row .stat-card:last-child, .how-grid .how-card:last-child { grid-column: span 2; }
+    }
+  </style>
+</head>
+<body>
+<div class="bg-blobs">
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+</div>
+
+<div class="page">
+  <header>
+    <a class="logo" href="#">
+      <div class="logo-icon">✂️</div>
+      LSHortener
+    </a>
+  </header>
+
+  <section class="hero">
+    <div class="hero-badge">✨ Бесплатно и без регистрации</div>
+    <h1>Длинные ссылки —<br><span class="accent">в короткие</span> за секунду</h1>
+    <p>Вставьте любую длинную ссылку и получите<br>красивую короткую, которой удобно делиться</p>
+  </section>
+
+  <div class="api-config">
+    <label>🔧 Сервер:</label>
+    <input type="text" id="serverURL" value="http://localhost:8080" />
+  </div>
+
+  <div class="main-card">
+    <div class="input-group">
+      <div class="url-input-wrap">
+        <span class="icon">🔗</span>
+        <input
+          type="url"
+          class="url-input"
+          id="originalURL"
+          placeholder="Вставьте вашу длинную ссылку сюда..."
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </div>
+      <button class="btn-shorten" id="shortenBtn" onclick="createShortURL()">
+        Сократить
+      </button>
+    </div>
+
+    <div class="options-toggle" onclick="toggleOptions()">
+      <span class="toggle-arrow" id="toggleArrow">▾</span>
+      <span>Дополнительные настройки</span>
+    </div>
+
+    <div class="options-panel" id="optionsPanel">
+      <div class="option-field">
+        <label>Своё красивое название <span class="sub">— необязательно</span></label>
+        <input type="text" class="option-input" id="customAlias" placeholder="например: moya-ssylka" />
+      </div>
+      <div class="option-field">
+        <label>Ссылка действует до <span class="sub">— необязательно</span></label>
+        <input type="datetime-local" class="option-input" id="expiresAt" style="color-scheme: light;" />
+      </div>
+    </div>
+
+    <div class="error-box" id="errorBox"></div>
+
+    <div class="result-box" id="resultBox">
+      <div class="result-label">🎉 Ваша короткая ссылка готова!</div>
+      <div class="result-url-row">
+        <div class="result-url" id="resultURL"></div>
+        <button class="btn-copy" id="copyBtn" onclick="copyResult()">Копировать</button>
+      </div>
+      <div class="result-meta" id="resultMeta"></div>
+    </div>
+  </div>
+
+  <div class="analytics-section" id="analyticsSection">
+    <div class="section-title">📊 Статистика переходов</div>
+    <div id="analyticsContent"></div>
+  </div>
+
+  <!-- Check stats by code -->
+  <div class="check-stats-section">
+    <div class="check-stats-card">
+      <div class="check-stats-icon">📊</div>
+      <div class="check-stats-text">
+        <div class="check-stats-title">Хотите проверить статистику позже?</div>
+        <div class="check-stats-sub">Введите вашу короткую ссылку или код — и мы всё покажем</div>
+      </div>
+      <div class="check-stats-input-row">
+        <div class="check-stats-input-wrap">
+          <span class="check-stats-prefix" id="serverPrefix">localhost:8080/</span>
+          <input
+            type="text"
+            id="checkCode"
+            class="check-stats-input"
+            placeholder="abc123"
+            autocomplete="off"
+            spellcheck="false"
+            onkeydown="if(event.key==='Enter') checkStats()"
+          />
+        </div>
+        <button class="btn-check" onclick="checkStats()">Посмотреть</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="how-section">
+    <div class="how-title">Как это работает?</div>
+    <div class="how-grid">
+      <div class="how-card">
+        <div class="how-emoji">📋</div>
+        <b>Вставьте</b>
+        <span>Скопируйте длинный адрес сайта</span>
+      </div>
+      <div class="how-card">
+        <div class="how-emoji">✂️</div>
+        <b>Сократите</b>
+        <span>Нажмите одну кнопку</span>
+      </div>
+      <div class="how-card">
+        <div class="how-emoji">🚀</div>
+        <b>Делитесь</b>
+        <span>Отправляйте куда угодно</span>
+      </div>
+    </div>
+  </div>
+
+  <footer>Сделано с ❤️ · LSHortener</footer>
+</div>
+
+<!-- Expired modal -->
+<div class="modal-overlay" id="expiredModal" onclick="closeExpiredModal(event)">
+  <div class="modal-card">
+    <div class="modal-icon-wrap">
+      <div class="modal-icon">⏳</div>
+      <div class="modal-badge">Истекла</div>
+    </div>
+    <h2 class="modal-title">Ссылка больше<br>не работает</h2>
+    <p class="modal-sub">Срок действия этой ссылки истёк.<br>Создайте новую — это займёт пару секунд!</p>
+    <div class="modal-info" id="modalInfo" style="display:none">
+      <span class="modal-info-label">⏰ Действовала до</span>
+      <span class="modal-info-value" id="modalExpiredAt"></span>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn-primary" onclick="closeExpiredModal(); scrollToTop()">✂️ Создать новую ссылку</button>
+      <button class="modal-btn-ghost" onclick="closeExpiredModal()">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const BASE = () => document.getElementById('serverURL').value.replace(/\/$/, '');
+  let currentShortCode = null;
+  let currentShortURL = null;
+
+  function toggleOptions() {
+    document.getElementById('optionsPanel').classList.toggle('open');
+    document.getElementById('toggleArrow').classList.toggle('open');
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('errorBox');
+    el.style.display = 'block';
+    el.textContent = msg;
+    el.style.animation = 'none';
+    el.offsetHeight; // trigger reflow
+    el.style.animation = '';
+    document.getElementById('resultBox').style.display = 'none';
+  }
+
+  function hideMessages() {
+    document.getElementById('errorBox').style.display = 'none';
+    document.getElementById('resultBox').style.display = 'none';
+  }
+
+  async function createShortURL() {
+    const url = document.getElementById('originalURL').value.trim();
+    if (!url) { showError('😊 Пожалуйста, вставьте ссылку!'); return; }
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      showError('🤔 Ссылка должна начинаться с http:// или https://');
+      return;
+    }
+
+    hideMessages();
+    document.getElementById('analyticsSection').style.display = 'none';
+
+    const btn = document.getElementById('shortenBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-wrap"><span class="spinner"></span> Сокращаю...</span>';
+
+    const body = { original_url: url };
+    const alias = document.getElementById('customAlias').value.trim();
+    const exp = document.getElementById('expiresAt').value;
+    if (alias) body.custom_alias = alias;
+    if (exp) body.expires_at = new Date(exp).toISOString();
+
+    try {
+      const r = await fetch(BASE() + '/shorten', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await r.json();
+
+      if (!r.ok) {
+        if (data.code === 'expired') {
+          openExpiredModal(data.expires_at || null);
+        } else {
+          showError('😕 ' + (data.error || data.message || 'Ошибка'));
+        }
+      } else {
+        currentShortCode = data.short_code;
+        currentShortURL = data.short_url || `${BASE()}/${data.short_code}`;
+        showResult(data);
+      }
+    } catch (e) {
+      console.error(e);
+      showError('😥 Нет связи с сервером. Проверьте настройки.');
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Сократить';
+  }
+
+  function showResult(data) {
+    const box = document.getElementById('resultBox');
+    box.style.display = 'block';
+    document.getElementById('resultURL').textContent = currentShortURL;
+
+    const meta = document.getElementById('resultMeta');
+    meta.innerHTML = '';
+
+    if (data.expires_at) {
+      const chip = document.createElement('div');
+      chip.className = 'result-chip';
+      chip.textContent = '⏰ До ' + new Date(data.expires_at).toLocaleDateString('ru-RU');
+      meta.appendChild(chip);
+    }
+    if (data.custom_alias) {
+      const chip = document.createElement('div');
+      chip.className = 'result-chip';
+      chip.textContent = '✏️ ' + data.custom_alias;
+      meta.appendChild(chip);
+    }
+
+    const statsBtn = document.createElement('button');
+    statsBtn.className = 'btn-analytics';
+    statsBtn.textContent = '📊 Статистика';
+    statsBtn.onclick = loadAnalytics;
+    meta.appendChild(statsBtn);
+  }
+
+  async function copyResult() {
+    const btn = document.getElementById('copyBtn');
+    try {
+      await navigator.clipboard.writeText(currentShortURL);
+      btn.textContent = '✅ Скопировано!';
+      setTimeout(() => { btn.textContent = 'Копировать'; }, 2000);
+    } catch {}
+  }
+
+ async function loadAnalytics() {
+  if (!currentShortCode) return;
+
+  const section = document.getElementById('analyticsSection');
+  section.style.display = 'block';
+  const content = document.getElementById('analyticsContent');
+  content.innerHTML = '<div class="empty-state"><div class="big">⏳</div><p>Загружаю...</p></div>';
+  
+  const apiUrl = BASE() + '/' + encodeURIComponent(currentShortCode) + '/analytics';
+  console.log("Запрос аналитики:", apiUrl);
+
+  try {
+    const r = await fetch(apiUrl);
+    
+    // Если сервер ответил, но статус не 200 (например, 404 или 500)
+    if (!r.ok) {
+      const errorData = await r.json().catch(() => ({})); 
+      throw new Error(errorData.error || `Ошибка сервера: ${r.status}`);
+    }
+
+    const data = await r.json();
+    console.log("Данные получены:", data);
+    
+    renderAnalytics(data); 
+
+  } catch (e) {
+    console.error("Детальная ошибка:", e);
+    // Проверяем, не CORS ли это или отсутствие сети
+    const errorMsg = e.message === 'Failed to fetch' 
+      ? 'Нет связи с сервером (CORS или сеть)' 
+      : e.message;
+      
+    content.innerHTML = `
+      <div class="empty-state">
+        <div class="big">📡</div>
+        <p>Не удалось загрузить данные.</p>
+        <small style="color: #A0A0A0;">${errorMsg}</small>
+      </div>`;
+  }
+}
+
+function renderAnalytics(d) {
+  // Используем оператор ?? для защиты от undefined/null
+  const clicks = d.total_clicks ?? 0;
+  const byDay = d.clicks_by_day ?? {};
+  const byUA = d.clicks_by_user_agent ?? {};
+  const recent = d.recent_clicks ?? [];
+  const daysArr = Object.entries(byDay);
+
+  let html = `
+    <div class="stats-row">
+      <div class="stat-card"><div class="stat-emoji">👆</div><div class="stat-num">${clicks}</div><div class="stat-name">Переходов</div></div>
+      <div class="stat-card"><div class="stat-emoji">📅</div><div class="stat-num">${daysArr.length}</div><div class="stat-name">Дней активности</div></div>
+      <div class="stat-card"><div class="stat-emoji">🌍</div><div class="stat-num">${Object.keys(byUA).length}</div><div class="stat-name">Устройств</div></div>
+    </div>`;
+
+  if (daysArr.length > 0) {
+    const maxDay = Math.max(...Object.values(byDay), 1);
+    html += `<div class="chart-card"><div class="chart-title">📈 Активность за неделю</div>`;
+    // Сортируем дни по дате и берем последние 7
+    daysArr.sort((a, b) => new Date(b[0]) - new Date(a[0])).slice(0, 7).forEach(([day, cnt]) => {
+      const pct = (cnt / maxDay * 100).toFixed(0);
+      const label = new Date(day).toLocaleDateString('ru-RU', { day:'numeric', month:'short' });
+      html += `
+        <div class="bar-row">
+          <span class="bar-label">${label}</span>
+          <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+          <span class="bar-count">${cnt}</span>
+        </div>`;
+    });
+    html += `</div>`;
+  }
+
+  if (recent && recent.length > 0) {
+    html += `<div class="chart-card"><div class="chart-title">🕐 Последние логи</div><div class="clicks-list">`;
+    recent.slice(0, 5).forEach(c => {
+      const time = c.clicked_at ? new Date(c.clicked_at).toLocaleTimeString('ru-RU') : '—';
+      const ua = c.user_agent ? (c.user_agent.length > 40 ? c.user_agent.substring(0, 37) + '...' : c.user_agent) : 'Unknown Device';
+      html += `
+        <div class="click-item">
+          <div class="click-info">
+            <div class="click-time">${time}</div>
+            <div class="click-detail" title="${c.user_agent}">${ua}</div>
+          </div>
+          <div class="click-ip">${c.ip_address || '0.0.0.0'}</div>
+        </div>`;
+    });
+    html += `</div></div>`;
+  } else if (clicks === 0) {
+    html += `<div class="empty-state"><div class="big">🌱</div><p>Здесь пока пусто. Ждем первых кликов!</p></div>`;
+  }
+
+  document.getElementById('analyticsContent').innerHTML = html;
+}
+
+  function openExpiredModal(expiredAt) {
+    document.getElementById('expiredModal').classList.add('open');
+    if (expiredAt) {
+       document.getElementById('modalExpiredAt').textContent = new Date(expiredAt).toLocaleString('ru-RU');
+       document.getElementById('modalInfo').style.display = 'flex';
+    }
+  }
+
+  function closeExpiredModal(e) {
+    if (e && e.target !== document.getElementById('expiredModal')) return;
+    document.getElementById('expiredModal').classList.remove('open');
+    document.getElementById('modalInfo').style.display = 'none';
+  }
+
+  function updatePrefix() {
+    try {
+      const url = new URL(document.getElementById('serverURL').value);
+      document.getElementById('serverPrefix').textContent = url.host + '/';
+    } catch {}
+  }
+  document.getElementById('serverURL').addEventListener('input', updatePrefix);
+  updatePrefix();
+
+  async function checkStats() {
+    let raw = document.getElementById('checkCode').value.trim();
+    if (!raw) return;
+    raw = raw.replace(/^\//, '');
+    
+    currentShortCode = raw;
+    currentShortURL = BASE() + '/' + raw;
+    
+    document.getElementById('analyticsSection').style.display = 'block';
+    document.getElementById('analyticsContent').innerHTML = '<div class="empty-state"><div class="big">⏳</div><p>Ищу...</p></div>';
+    await loadAnalytics();
+    document.getElementById('analyticsSection').scrollIntoView({ behavior: 'smooth' });
+  }
+</script>
+</body>
+</html>

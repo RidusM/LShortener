@@ -19,9 +19,32 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/health": {
+            "get": {
+                "description": "Return service status and current timestamp. No authentication required.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "Health check endpoint",
+                "responses": {
+                    "200": {
+                        "description": "Service is healthy",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/shorten": {
             "post": {
-                "description": "Создает сокращенную ссылку из оригинальной",
+                "description": "Creates a shortened link from the original",
                 "consumes": [
                     "application/json"
                 ],
@@ -31,33 +54,33 @@ const docTemplate = `{
                 "tags": [
                     "ShortURL"
                 ],
-                "summary": "Создать сокращенную ссылку",
+                "summary": "Create a shortened link",
                 "parameters": [
                     {
-                        "description": "Данные для создания короткой ссылки",
+                        "description": "Data for creating a short link",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handler.CreateShortURLRequest"
+                            "$ref": "#/definitions/handler.CreateURLRequest"
                         }
                     }
                 ],
                 "responses": {
                     "201": {
-                        "description": "Короткая ссылка создана",
+                        "description": "Short link created",
                         "schema": {
-                            "$ref": "#/definitions/handler.CreateShortURLResponse"
+                            "$ref": "#/definitions/handler.CreateURLResponse"
                         }
                     },
                     "400": {
-                        "description": "Ошибка валидации",
+                        "description": "Validation error",
                         "schema": {
                             "$ref": "#/definitions/handler.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Внутренняя ошибка сервера",
+                        "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/handler.ErrorResponse"
                         }
@@ -67,16 +90,16 @@ const docTemplate = `{
         },
         "/{short_code}": {
             "get": {
-                "description": "Перенаправляет на оригинальную ссылку по короткому коду",
+                "description": "Redirects to the original link using a short code",
                 "tags": [
                     "ShortURL"
                 ],
-                "summary": "Переход по короткой ссылке",
+                "summary": "Follow a short link",
                 "parameters": [
                     {
                         "minLength": 1,
                         "type": "string",
-                        "description": "Короткий код ссылки",
+                        "description": "Link short code",
                         "name": "short_code",
                         "in": "path",
                         "required": true
@@ -90,19 +113,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Отсутствует short_code",
+                        "description": "Missing short_code",
                         "schema": {
                             "$ref": "#/definitions/handler.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Ссылка не найдена",
+                        "description": "Link not found",
                         "schema": {
                             "$ref": "#/definitions/handler.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Внутренняя ошибка",
+                        "description": "Internal error",
                         "schema": {
                             "$ref": "#/definitions/handler.ErrorResponse"
                         }
@@ -112,7 +135,7 @@ const docTemplate = `{
         },
         "/{short_code}/analytics": {
             "get": {
-                "description": "Возвращает статистику переходов по короткому коду",
+                "description": "Returns click statistics for a short code",
                 "consumes": [
                     "application/json"
                 ],
@@ -122,12 +145,12 @@ const docTemplate = `{
                 "tags": [
                     "ShortURL"
                 ],
-                "summary": "Получить аналитику по короткой ссылке",
+                "summary": "Get analytics for a short link",
                 "parameters": [
                     {
                         "minLength": 1,
                         "type": "string",
-                        "description": "Короткий код ссылки",
+                        "description": "Link short code",
                         "name": "short_code",
                         "in": "path",
                         "required": true
@@ -135,25 +158,25 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Аналитика получена",
+                        "description": "Analytics received",
                         "schema": {
                             "$ref": "#/definitions/handler.AnalyticsResponse"
                         }
                     },
                     "400": {
-                        "description": "Отсутствует short_code",
+                        "description": "Missing short_code",
                         "schema": {
                             "$ref": "#/definitions/handler.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Ссылка не найдена",
+                        "description": "Link not found",
                         "schema": {
                             "$ref": "#/definitions/handler.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Внутренняя ошибка",
+                        "description": "Internal error",
                         "schema": {
                             "$ref": "#/definitions/handler.ErrorResponse"
                         }
@@ -188,7 +211,7 @@ const docTemplate = `{
                 },
                 "created_at": {
                     "type": "string",
-                    "example": "2023-10-27T10:00:00Z"
+                    "example": "2026-05-07T10:00:00Z"
                 },
                 "original_url": {
                     "type": "string",
@@ -197,7 +220,7 @@ const docTemplate = `{
                 "recent_clicks": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/handler.ClickDetail"
+                        "$ref": "#/definitions/handler.ClickInfo"
                     }
                 },
                 "short_code": {
@@ -210,12 +233,12 @@ const docTemplate = `{
                 }
             }
         },
-        "handler.ClickDetail": {
+        "handler.ClickInfo": {
             "type": "object",
             "properties": {
                 "clicked_at": {
                     "type": "string",
-                    "example": "2023-10-27T10:00:00Z"
+                    "example": "2026-05-07T10:00:00Z"
                 },
                 "ip_address": {
                     "type": "string",
@@ -231,7 +254,7 @@ const docTemplate = `{
                 }
             }
         },
-        "handler.CreateShortURLRequest": {
+        "handler.CreateURLRequest": {
             "type": "object",
             "required": [
                 "original_url"
@@ -239,11 +262,13 @@ const docTemplate = `{
             "properties": {
                 "custom_alias": {
                     "type": "string",
-                    "example": "my-link"
+                    "maxLength": 50,
+                    "minLength": 3,
+                    "example": "mylink"
                 },
                 "expires_at": {
                     "type": "string",
-                    "example": "2023-10-27T10:00:00Z"
+                    "example": "2026-12-31T23:59:59Z"
                 },
                 "original_url": {
                     "type": "string",
@@ -251,20 +276,20 @@ const docTemplate = `{
                 }
             }
         },
-        "handler.CreateShortURLResponse": {
+        "handler.CreateURLResponse": {
             "type": "object",
             "properties": {
                 "created_at": {
                     "type": "string",
-                    "example": "2023-10-27T10:00:00Z"
+                    "example": "2026-05-07T10:00:00Z"
                 },
                 "custom_alias": {
                     "type": "string",
-                    "example": "my-link"
+                    "example": "mylink"
                 },
                 "expires_at": {
                     "type": "string",
-                    "example": "2023-10-27T10:00:00Z"
+                    "example": "2026-12-31T23:59:59Z"
                 },
                 "id": {
                     "type": "string",
@@ -293,7 +318,7 @@ const docTemplate = `{
                 },
                 "details": {
                     "type": "string",
-                    "example": "link with short_code does not exist"
+                    "example": "link with short_code abc123 does not exist"
                 },
                 "error": {
                     "type": "string",
@@ -311,7 +336,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "/",
 	Schemes:          []string{},
 	Title:            "Link Shortener API",
-	Description:      "API для сокращения ссылок",
+	Description:      "Link shortening API",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

@@ -14,8 +14,8 @@ type (
 	}
 
 	App struct {
-		Name    string `env:"NAME"    env-default:"delayed-notifier" validate:"required"`
-		Version string `env:"VERSION" env-default:"1.0.0"            validate:"required"`
+		Name    string `env:"NAME"    env-default:"lshortener" validate:"required"`
+		Version string `env:"VERSION" env-default:"1.0.0"      validate:"required"`
 	}
 
 	Service struct {
@@ -23,6 +23,8 @@ type (
 		DefaultTTL      time.Duration `env:"DEFAULT_TTL"       env-default:"0"`
 		BaseURL         string        `env:"BASE_URL"          env-default:"http://localhost:8080" validate:"required,url"`
 		MaxRetries      int           `env:"MAX_RETRIES"       env-default:"5"                     validate:"min=1,max=10"`
+		QueryLimit      uint64        `env:"QUERY_LIMIT"       env-default:"10"                    validate:"min=1,max=100"`
+		RetryDelay      time.Duration `env:"RETRY_DELAY"       env-default:"5m"                    validate:"gte=1ms,lte=1m"`
 	}
 
 	Database struct {
@@ -55,10 +57,10 @@ type (
 	}
 
 	Logger struct {
-		Level      string `env:"LEVEL"       env-default:"info"                        validate:"oneof=debug info warn error"`
-		Filename   string `env:"FILENAME"    env-default:"./logs/delayed-notifier.log"`
-		MaxSize    int    `env:"MAX_SIZE"    env-default:"100"                         validate:"min=1,max=1000"`
-		MaxBackups int    `env:"MAX_BACKUPS" env-default:"3"                           validate:"min=0,max=20"`
-		MaxAge     int    `env:"MAX_AGE"     env-default:"28"                          validate:"min=1,max=365"`
+		Level      string `env:"LEVEL"       env-default:"info"                  validate:"oneof=debug info warn error"`
+		Filename   string `env:"FILENAME"    env-default:"./logs/lshortener.log"`
+		MaxSize    int    `env:"MAX_SIZE"    env-default:"100"                   validate:"min=1,max=1000"`
+		MaxBackups int    `env:"MAX_BACKUPS" env-default:"3"                     validate:"min=0,max=20"`
+		MaxAge     int    `env:"MAX_AGE"     env-default:"28"                    validate:"min=1,max=365"`
 	}
 )

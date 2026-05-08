@@ -14,6 +14,10 @@ import (
 	pgxdriver "github.com/wb-go/wbf/dbpg/pgx-driver"
 )
 
+const (
+	_urlColumns = "id, short_code, original_url, custom_alias, expires_at, is_active, click_count, created_at"
+)
+
 type URLRepository struct {
 	db *pgxdriver.Postgres
 }
@@ -22,44 +26,38 @@ func NewURLRepository(db *pgxdriver.Postgres) *URLRepository {
 	return &URLRepository{db: db}
 }
 
-func (r *URLRepository) Create(ctx context.Context, qe pgxdriver.QueryExecuter, url entity.URL) (*entity.URL, error) {
+func (r *URLRepository) Create(
+	ctx context.Context,
+	qe pgxdriver.QueryExecuter,
+	u entity.URL,
+) (*entity.URL, error) {
 	const op = "repository.url.Create"
 
-	executor := execOrDB(qe, r.db)
-
-	var err error
-	url.ID, err = uuid.NewV7()
+	sql, args, err := r.db.Insert("urls").
+		Columns("id", "short_code", "original_url", "custom_alias", "expires_at").
+		Values(u.ID, u.ShortCode, u.OriginalURL, u.CustomAlias, u.ExpiresAt).
+		Suffix("RETURNING " + _urlColumns).
+		ToSql()
 	if err != nil {
-		return nil, fmt.Errorf("%s: v7 uuid: %w", op, err)
-	}
-	url.IsActive = true
-	url.ClickCount = 0
-
-	insert := r.db.Insert("urls").
-		Columns("id", "short_code", "original_url", "custom_alias", "expires_at", "is_active", "click_count").
-		Values(url.ID, url.ShortCode, url.OriginalURL, url.CustomAlias, url.ExpiresAt, url.IsActive, url.ClickCount).
-		Suffix("RETURNING id, short_code, original_url, custom_alias, expires_at, is_active, click_count")
-
-	query, args, err := insert.ToSql()
-	if err != nil {
-		return nil, fmt.Errorf("%s: insert query: %w", op, err)
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	var result entity.URL
-	err = executor.QueryRow(ctx, query, args...).Scan(
-		&result.ID,
-		&result.ShortCode,
-		&result.OriginalURL,
-		&result.CustomAlias,
-		&result.ExpiresAt,
-		&result.IsActive,
-		&result.ClickCount,
+	var url entity.URL
+	err = execOrDB(qe, r.db).QueryRow(ctx, sql, args...).Scan(
+		&url.ID,
+		&url.ShortCode,
+		&url.OriginalURL,
+		&url.CustomAlias,
+		&url.ExpiresAt,
+		&url.IsActive,
+		&url.ClickCount,
+		&url.CreatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	return &result, nil
+	return &url, nil
 }
 
 func (r *URLRepository) GetByShortCode(
@@ -68,7 +66,12 @@ func (r *URLRepository) GetByShortCode(
 	shortCode string,
 ) (*entity.URL, error) {
 	const op = "repository.url.GetByShortCode"
-	return r.getURLByField(ctx, qe, "short_code", shortCode, op)
+
+	url, err := r.getURLByField(ctx, qe, "short_code", shortCode, op)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+	return url, nil
 }
 
 func (r *URLRepository) GetByCustomAlias(
@@ -77,30 +80,36 @@ func (r *URLRepository) GetByCustomAlias(
 	alias string,
 ) (*entity.URL, error) {
 	const op = "repository.url.GetByCustomAlias"
-	return r.getURLByField(ctx, qe, "custom_alias", alias, op)
+
+	url, err := r.getURLByField(ctx, qe, "custom_alias", alias, op)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+	return url, nil
 }
 
-func (r *URLRepository) IncrementClickCount(ctx context.Context, qe pgxdriver.QueryExecuter, urlID uuid.UUID) error {
+func (r *URLRepository) IncrementClickCount(
+	ctx context.Context,
+	qe pgxdriver.QueryExecuter,
+	urlID uuid.UUID,
+) error {
 	const op = "repository.url.IncrementClickCount"
 
-	executor := execOrDB(qe, r.db)
-
-	update := r.db.Update("urls").
+	sql, args, err := r.db.Update("urls").
 		Set("click_count", squirrel.Expr("click_count + 1")).
-		Where(squirrel.Eq{"id": urlID})
-
-	query, args, err := update.ToSql()
+		Where(squirrel.Eq{"id": urlID}).
+		ToSql()
 	if err != nil {
-		return fmt.Errorf("%s: update query: %w", op, err)
+		return fmt.Errorf("%s: %w", op, err)
 	}
 
-	_, err = executor.Exec(ctx, query, args...)
+	_, err = execOrDB(qe, r.db).Exec(ctx, sql, args...)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return fmt.Errorf("%s: %w", op, entity.ErrConflictingData)
 		}
-		return fmt.Errorf("%s: exec: %w", op, err)
+		return fmt.Errorf("%s: %w", op, err)
 	}
 
 	return nil
@@ -111,41 +120,45 @@ func (r *URLRepository) ShortCodeExists(
 	qe pgxdriver.QueryExecuter,
 	shortCode string,
 ) (bool, error) {
-	const op = "repository.ulr.ShortCodeExists"
+	const op = "repository.url.ShortCodeExists"
 
-	executor := execOrDB(qe, r.db)
-
-	selectQuery := r.db.Select("EXISTS(SELECT 1 FROM urls WHERE short_code = ?)", shortCode)
-
-	query, args, err := selectQuery.ToSql()
+	sql, args, err := r.db.Select("1").
+		From("urls").
+		Where(squirrel.Eq{"short_code": shortCode}).
+		Prefix("SELECT EXISTS (").
+		Suffix(")").
+		ToSql()
 	if err != nil {
-		return false, fmt.Errorf("%s: select query: %w", op, err)
+		return false, fmt.Errorf("%s: %w", op, err)
 	}
 
 	var exists bool
-	err = executor.QueryRow(ctx, query, args...).Scan(&exists)
-	if err != nil {
+	if err = execOrDB(qe, r.db).QueryRow(ctx, sql, args...).Scan(&exists); err != nil {
 		return false, fmt.Errorf("%s: %w", op, err)
 	}
 
 	return exists, nil
 }
 
-func (r *URLRepository) CustomAliasExists(ctx context.Context, qe pgxdriver.QueryExecuter, alias string) (bool, error) {
+func (r *URLRepository) CustomAliasExists(
+	ctx context.Context,
+	qe pgxdriver.QueryExecuter,
+	alias string,
+) (bool, error) {
 	const op = "repository.url.CustomAliasExists"
 
-	executor := execOrDB(qe, r.db)
-
-	selectQuery := r.db.Select("EXISTS(SELECT 1 FROM urls WHERE custom_alias = ?)", alias)
-
-	query, args, err := selectQuery.ToSql()
+	sql, args, err := r.db.Select("1").
+		From("urls").
+		Where(squirrel.Eq{"custom_alias": alias}).
+		Prefix("SELECT EXISTS (").
+		Suffix(")").
+		ToSql()
 	if err != nil {
-		return false, fmt.Errorf("%s: select query: %w", op, err)
+		return false, fmt.Errorf("%s: %w", op, err)
 	}
 
 	var exists bool
-	err = executor.QueryRow(ctx, query, args...).Scan(&exists)
-	if err != nil {
+	if err = execOrDB(qe, r.db).QueryRow(ctx, sql, args...).Scan(&exists); err != nil {
 		return false, fmt.Errorf("%s: %w", op, err)
 	}
 
@@ -159,26 +172,29 @@ func (r *URLRepository) getURLByField(
 	value any,
 	op string,
 ) (*entity.URL, error) {
-	executor := execOrDB(qe, r.db)
-	selectQuery := r.db.Select(
-		"id", "short_code", "original_url", "custom_alias",
-		"expires_at", "is_active", "click_count",
-	).From("urls").Where(squirrel.Eq{field: value})
-
-	query, args, err := selectQuery.ToSql()
+	sql, args, err := r.db.Select(_urlColumns).
+		From("urls").
+		Where(squirrel.Eq{field: value}).
+		ToSql()
 	if err != nil {
-		return nil, fmt.Errorf("%s: build query: %w", op, err)
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	var url entity.URL
-	if qrErr := executor.QueryRow(ctx, query, args...).Scan(
-		&url.ID, &url.ShortCode, &url.OriginalURL, &url.CustomAlias,
-		&url.ExpiresAt, &url.IsActive, &url.ClickCount,
-	); qrErr != nil {
-		if errors.Is(qrErr, pgx.ErrNoRows) {
+	if err = execOrDB(qe, r.db).QueryRow(ctx, sql, args...).Scan(
+		&url.ID,
+		&url.ShortCode,
+		&url.OriginalURL,
+		&url.CustomAlias,
+		&url.ExpiresAt,
+		&url.IsActive,
+		&url.ClickCount,
+		&url.CreatedAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, entity.ErrDataNotFound
 		}
-		return nil, fmt.Errorf("%s: %w", op, qrErr)
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 	return &url, nil
 }
